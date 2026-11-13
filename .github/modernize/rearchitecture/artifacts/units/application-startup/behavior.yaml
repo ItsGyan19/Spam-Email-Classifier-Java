@@ -1,0 +1,35 @@
+unit: application-startup
+side_effects:
+  - source_loc: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java:30
+    effect: "At application initialization, reset the classifier and train it from the classpath CSV when that resource exists."
+    must_preserve: true
+branches:
+  - source_loc: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java:40
+    condition: "The packaged training dataset resource exists."
+    behavior: "Read the dataset and train the Naive Bayes classifier."
+    must_preserve: true
+  - source_loc: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java:40
+    condition: "The packaged training dataset resource is absent."
+    behavior: "Log a warning and leave the reset classifier without the default training data."
+    must_preserve: true
+  - source_loc: src/main/java/com/classifier/spam/service/ml/NaiveBayesClassifierService.java:92
+    condition: "Training text is null, blank, or produces no tokens."
+    behavior: "Ignore the sample without changing model counts."
+    must_preserve: true
+  - source_loc: src/main/java/com/classifier/spam/service/heuristic/HeuristicRuleEngineService.java:71
+    condition: "A message matches one or more configured heuristic indicators."
+    behavior: "Return matching triggers and cap the accumulated risk score at 100."
+    must_preserve: true
+error_paths:
+  - source_loc: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java:47
+    trigger: "Loading the default training resource fails."
+    outcome: "Log the failure; application initialization does not rethrow this exception."
+    contract: "Internal startup behavior; no external error response is defined."
+    must_preserve: true
+  - source_loc: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java:81
+    trigger: "Reading or parsing the training stream fails."
+    outcome: "Log the failure and return the number of samples processed before the error."
+    contract: "Internal loader behavior; no external error response is defined."
+    must_preserve: true
+concurrency:
+  model: sync

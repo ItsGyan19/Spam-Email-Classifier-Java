@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Safety Checker</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="logo-area">
+          <div class="logo-icon">🛡️</div>
+          <div>
+            <h1>Email Safety Checker</h1>
+            <p class="subtitle">Check whether an email looks suspicious and see what raised concern.</p>
+          </div>
+        </div>
+        <div class="header-badges">
+          <span class="badge badge-pill badge-primary">Spam Check</span>
+          <span class="badge badge-pill badge-secondary">Topic Detection</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="main-layout">
+      <!-- Left Column: Input & Presets -->
+      <section class="card input-card">
+        <div class="card-header">
+          <h2>Analyze Email</h2>
+          <span class="hint">Paste text or choose a test preset below</span>
+        </div>
+
+        <!-- Preset Pills -->
+        <div class="preset-wrapper">
+          <span class="preset-label">Test Samples:</span>
+          <div class="preset-buttons">
+            <button class="preset-btn" data-preset="phishing">🚨 Phishing Alert</button>
+            <button class="preset-btn" data-preset="lottery">💰 $2.5M Lottery</button>
+            <button class="preset-btn" data-preset="crypto">📈 Crypto Trading Bot</button>
+            <button class="preset-btn" data-preset="work">💼 Sprint Planning</button>
+            <button class="preset-btn" data-preset="receipt">✈️ Flight Booking</button>
+          </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="textarea-container">
+          <textarea id="email-input" placeholder="Paste full email subject and body here... (e.g. URGENT: Your account has been suspended! Click link to verify...)"></textarea>
+          <div class="textarea-footer">
+            <span id="char-count">0 characters | 0 words</span>
+            <button id="clear-btn" class="btn btn-ghost">Clear</button>
+          </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="action-bar">
+          <button id="classify-btn" class="btn btn-primary btn-large">
+            <span class="btn-icon">⚡</span>
+            <span>Classify Email</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Right Column: Results & Explainability -->
+      <section class="card result-card" id="result-container">
+        <div class="card-header">
+          <h2>Email Check Result</h2>
+          <span id="analysis-status" class="hint">Awaiting input...</span>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon">📨</div>
+          <h3>Ready to check an email</h3>
+          <p>Paste an email or choose a sample to see whether it looks suspicious, its likely topic, and the clues behind the result.</p>
+        </div>
+
+        <div id="results-panel" class="results-panel hidden">
+          <!-- Primary Verdict Banner -->
+          <div id="verdict-banner" class="verdict-banner">
+            <div class="verdict-main">
+              <span id="verdict-icon" class="verdict-icon">⚠️</span>
+              <div>
+                <span class="verdict-tag" id="verdict-tag">SPAM DETECTED</span>
+                <h3 id="verdict-title">Potential Malicious Message</h3>
+              </div>
+            </div>
+            <div class="verdict-score">
+              <span class="score-label">Confidence</span>
+              <span class="score-val" id="confidence-val">99.8%</span>
+            </div>
+          </div>
+
+          <!-- Probability Gauge -->
+          <div class="gauge-section">
+            <div class="gauge-labels">
+              <span>Ham (Legitimate): <strong id="ham-pct">0.2%</strong></span>
+              <span>Spam: <strong id="spam-pct">99.8%</strong></span>
+            </div>
+            <div class="gauge-track">
+              <progress id="probability-meter" class="gauge-progress" max="100" value="50" aria-label="Ham and spam probability"></progress>
+            </div>
+          </div>
+
+          <!-- Topic Badge & Heuristics -->
+          <div class="meta-grid">
+            <div class="meta-item">
+              <span class="meta-title">Identified Topic</span>
+              <div class="topic-pill" id="topic-pill">
+                <span id="topic-icon">🎯</span>
+                <span id="topic-text">Phishing & Credential Alert</span>
+              </div>
+            </div>
+            <div class="meta-item">
+              <span class="meta-title">Topic Confidence</span>
+              <span class="meta-val" id="topic-conf">92.4%</span>
+            </div>
+          </div>
+
+          <!-- Structural Heuristics -->
+          <div class="heuristics-card">
+            <h4>Structural Domain Signals</h4>
+            <div class="heuristics-grid">
+              <div class="h-stat">
+                <span class="h-name">Capital Ratio</span>
+                <span class="h-val" id="h-cap">0%</span>
+              </div>
+              <div class="h-stat">
+                <span class="h-name">Currency Signs</span>
+                <span class="h-val" id="h-currency">0</span>
+              </div>
+              <div class="h-stat">
+                <span class="h-name">Links / URLs</span>
+                <span class="h-val" id="h-urls">0</span>
+              </div>
+              <div class="h-stat">
+                <span class="h-name">Exclamation Punct.</span>
+                <span class="h-val" id="h-exclamation">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Explainability / Word Contributions -->
+          <div class="explainability-section">
+            <h4>Why this result?</h4>
+            <p class="section-desc">Words and details that influenced the email check:</p>
+            
+            <div class="words-container">
+              <div class="words-col">
+                <span class="col-title spam-title">Spam Signals (+)</span>
+                <div id="spam-words-list" class="words-pills">
+                  <span class="no-words">None</span>
+                </div>
+              </div>
+
+              <div class="words-col">
+                <span class="col-title ham-title">Ham Signals (-)</span>
+                <div id="ham-words-list" class="words-pills">
+                  <span class="no-words">None</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Section: Test Results -->
+    <section class="card benchmark-card">
+      <div class="benchmark-header">
+        <div>
+          <h2>How well does it perform?</h2>
+          <p class="subtitle">Results from checking a reserved sample of the included emails.</p>
+        </div>
+        <button id="refresh-metrics-btn" class="btn btn-secondary">Refresh Results</button>
+      </div>
+
+      <div class="table-responsive">
+        <table class="benchmark-table">
+          <thead>
+            <tr>
+              <th>Check</th>
+              <th>Correct Results</th>
+              <th>Spam Found</th>
+              <th>Spam Accuracy</th>
+              <th>Overall Score</th>
+              <th>Ranking Score</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="benchmark-tbody">
+            <tr><td colspan="7" class="loading-td">Loading test results...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- How it works -->
+      <div class="pipeline-explainer">
+        <h3>What happens when you check an email?</h3>
+        <div class="pipeline-steps">
+          <div class="p-step">
+            <span class="p-num">1</span>
+            <strong>Email details are reviewed</strong>
+            <span>Message text, links, and common warning signs are checked.</span>
+          </div>
+          <div class="p-arrow">➔</div>
+          <div class="p-step">
+            <span class="p-num">2</span>
+            <strong>Important wording is identified</strong>
+            <span>Suspicious and reassuring phrases are considered in context.</span>
+          </div>
+          <div class="p-arrow">➔</div>
+          <div class="p-step">
+            <span class="p-num">3</span>
+            <strong>Risk signs are compared</strong>
+            <span>The message is checked against examples of spam and regular email.</span>
+          </div>
+          <div class="p-arrow">➔</div>
+          <div class="p-step">
+            <span class="p-num">4</span>
+            <strong>A result is prepared</strong>
+            <span>You receive a spam or regular email result and a likely topic.</span>
+          </div>
+          <div class="p-arrow">➔</div>
+          <div class="p-step">
+            <span class="p-num">5</span>
+            <strong>The reason is shown</strong>
+            <span>Review the clues that influenced the result before deciding what to do.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Email Safety Checker • Review suspicious messages and understand the result.</p>
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
+

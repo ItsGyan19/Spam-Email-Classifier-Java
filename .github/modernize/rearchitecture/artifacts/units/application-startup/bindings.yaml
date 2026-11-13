@@ -1,0 +1,57 @@
+unit: application-startup
+bindings:
+  - type: annotation
+    name: "@SpringBootApplication"
+    source_loc: src/main/java/com/classifier/spam/SpamEmailClassifierApplication.java:6
+    target: com.classifier.spam.SpamEmailClassifierApplication
+    must_appear_in_target: true
+    notes: "Bootstraps Spring Boot and scans the containing package and descendants."
+  - type: annotation
+    name: "@Service"
+    source_loc: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java:17
+    target: com.classifier.spam.service.ml.ModelDataLoaderService
+    must_appear_in_target: true
+    notes: "Discovered by Spring component scanning."
+  - type: annotation
+    name: "@Service"
+    source_loc: src/main/java/com/classifier/spam/service/ml/NaiveBayesClassifierService.java:13
+    target: com.classifier.spam.service.ml.NaiveBayesClassifierService
+    must_appear_in_target: true
+    notes: "Discovered by Spring component scanning."
+  - type: annotation
+    name: "@Service"
+    source_loc: src/main/java/com/classifier/spam/service/nlp/TextPreprocessingService.java:9
+    target: com.classifier.spam.service.nlp.TextPreprocessingService
+    must_appear_in_target: true
+    notes: "Discovered by Spring component scanning."
+  - type: annotation
+    name: "@Component"
+    source_loc: src/main/java/com/classifier/spam/service/nlp/PorterStemmer.java:9
+    target: com.classifier.spam.service.nlp.PorterStemmer
+    must_appear_in_target: true
+    notes: "Discovered by Spring component scanning."
+  - type: annotation
+    name: "@Service"
+    source_loc: src/main/java/com/classifier/spam/service/heuristic/HeuristicRuleEngineService.java:9
+    target: com.classifier.spam.service.heuristic.HeuristicRuleEngineService
+    must_appear_in_target: true
+    notes: "Discovered by Spring component scanning."
+  - type: annotation
+    name: "@PostConstruct"
+    source_loc: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java:30
+    target: ModelDataLoaderService.init
+    must_appear_in_target: true
+    notes: "Loads the bundled dataset after dependency injection."
+runtime_config:
+  - key: spring.jpa.open-in-view
+    source_loc: src/main/resources/application.properties:1
+    source: properties-file
+    default_value: "false"
+    must_appear_in_target: true
+    notes: "Disables Open Session in View and prevents database access during view rendering."
+  - key: spring.thymeleaf.check-template-location
+    source_loc: src/main/resources/application.properties:2
+    source: properties-file
+    default_value: "false"
+    must_appear_in_target: true
+    notes: "Disables the startup warning for the currently absent Thymeleaf templates directory."

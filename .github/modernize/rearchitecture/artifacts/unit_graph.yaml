@@ -1,0 +1,37 @@
+units:
+  - name: application-startup
+    trigger: cli
+    trigger_detail: "Launch the Spring Boot application via its main method"
+    source_anchors:
+      - path: src/main/java/com/classifier/spam/SpamEmailClassifierApplication.java
+        line: 9
+      - path: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java
+        line: 30
+      - path: src/main/java/com/classifier/spam/service/ml/NaiveBayesClassifierService.java
+        line: 13
+      - path: src/main/java/com/classifier/spam/service/nlp/TextPreprocessingService.java
+        line: 9
+      - path: src/main/java/com/classifier/spam/service/nlp/PorterStemmer.java
+        line: 9
+      - path: src/main/java/com/classifier/spam/service/heuristic/HeuristicRuleEngineService.java
+        line: 9
+      - path: src/main/resources/dataset/spam_training_dataset.csv
+    exported_signature: []
+    dynamic_entrypoints:
+      - target: com.classifier.spam.service.ml.ModelDataLoaderService
+        mechanism: annotation-scan
+        source_loc: src/main/java/com/classifier/spam/service/ml/ModelDataLoaderService.java:17
+      - target: com.classifier.spam.service.ml.NaiveBayesClassifierService
+        mechanism: annotation-scan
+        source_loc: src/main/java/com/classifier/spam/service/ml/NaiveBayesClassifierService.java:13
+      - target: com.classifier.spam.service.nlp.TextPreprocessingService
+        mechanism: annotation-scan
+        source_loc: src/main/java/com/classifier/spam/service/nlp/TextPreprocessingService.java:9
+      - target: com.classifier.spam.service.nlp.PorterStemmer
+        mechanism: annotation-scan
+        source_loc: src/main/java/com/classifier/spam/service/nlp/PorterStemmer.java:9
+      - target: com.classifier.spam.service.heuristic.HeuristicRuleEngineService
+        mechanism: annotation-scan
+        source_loc: src/main/java/com/classifier/spam/service/heuristic/HeuristicRuleEngineService.java:9
+    depends_on: []
+    shared_refs: []
