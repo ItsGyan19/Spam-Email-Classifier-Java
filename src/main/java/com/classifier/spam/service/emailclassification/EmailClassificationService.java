@@ -1,8 +1,10 @@
 package com.classifier.spam.service.emailclassification;
 
+import com.classifier.spam.dto.ClassificationResponse;
 import com.classifier.spam.service.textprocessing.TextPreprocessingService;
 import com.classifier.spam.service.textprocessing.TextPreprocessingService.ExtractedFeatures;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -12,6 +14,8 @@ import java.util.Map;
 
 @Service
 public class EmailClassificationService {
+    private static final Logger log = LoggerFactory.getLogger(EmailClassificationService.class);
+
     private static final int SEGMENT_LENGTH = 500;
     private static final int MIN_LONG_MESSAGE_LENGTH = 2_500;
     private static final double HIGH_SEGMENT_SPAM_THRESHOLD = 0.5;
@@ -68,11 +72,13 @@ public class EmailClassificationService {
         String topicDisplay = TOPIC_DISPLAY_NAMES.getOrDefault(topicPrediction.topic(),
                 topicPrediction.topic().replace('_', ' ').toLowerCase(Locale.ROOT));
 
-        return new ClassificationResponse(isSpam ? "spam" : "ham", isSpam, round4(confidence),
+        ClassificationResponse response = new ClassificationResponse(isSpam ? "spam" : "ham", isSpam, round4(confidence),
                 round2(confidence * 100), round4(spamProbability),
                 round4(hamProbability), topicPrediction.topic(), topicDisplay,
                 round2(topicPrediction.confidence() * 100), spamPrediction.explanation(),
                 heuristicFeatures(features));
+        log.info("Email classified: label={}, isSpam={}, confidence={}%", response.label(), response.isSpam(), response.confidencePercent());
+        return response;
     }
 
     public Map<String, Object> getModelStatistics() {
@@ -126,17 +132,4 @@ public class EmailClassificationService {
 
     private double round4(double value) { return Math.round(value * 10_000.0) / 10_000.0; }
     private double round2(double value) { return Math.round(value * 100.0) / 100.0; }
-
-    public record ClassificationResponse(
-            @JsonProperty("label") String label,
-            @JsonProperty("is_spam") boolean isSpam,
-            @JsonProperty("confidence") double confidence,
-            @JsonProperty("confidence_percent") double confidencePercent,
-            @JsonProperty("spam_probability") double spamProbability,
-            @JsonProperty("ham_probability") double hamProbability,
-            @JsonProperty("topic") String topic,
-            @JsonProperty("topic_display") String topicDisplay,
-            @JsonProperty("topic_confidence") double topicConfidence,
-            @JsonProperty("explanation") NaiveBayesClassifierService.Explanation explanation,
-            @JsonProperty("heuristics") Map<String, Object> heuristics) { }
 }

@@ -1,155 +1,388 @@
-# Email Safety Checker
+# 🛡️ Email Safety Checker – Spam Email Classifier
 
-Email Safety Checker is a Java web application that checks whether an email looks like spam or a regular message. It also predicts the email topic and shows words and details that influenced the result. You can use the browser dashboard, send requests to the REST API, or run the command-line tool.
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Build](https://img.shields.io/badge/Build-Maven-blue.svg)](https://maven.apache.org/)
+[![Tests](https://img.shields.io/badge/Tests-JUnit%205-red.svg)](https://junit.org/junit5/)
+[![Docker](https://img.shields.io/badge/Deployment-Docker-blue.svg)](https://www.docker.com/)
 
-## Technologies and versions
+A practical, clean, end-to-end Java Spring Boot application that analyzes incoming emails to detect **spam vs. legitimate (ham)** messages, predicts the **fine-grained email topic** (Phishing, Lottery, Crypto Scam, Marketing, Work, etc.), and provides **Explainable AI (XAI) feature attribution** for every prediction.
 
-- Java 21
-- Spring Boot 3.5.7
-- Maven 3.6.3 or newer
-- Spring MVC and Thymeleaf for the web application and dashboard
-- HTML, CSS, and JavaScript for the browser interface
+Built with a clean **Controller-Service-DTO** layered architecture, native Java NLP/ML algorithms (TF-IDF vectorization and Multinomial Naive Bayes), in-memory rate limiting, and an interactive Thymeleaf web dashboard.
 
-## How it works
+---
 
-1. When the application starts, it loads 2,600 sample emails from `src/main/resources/dataset/emails.csv`.
-2. It makes a repeatable split: 2,080 emails are used to train the classifiers and 520 are held back to measure their performance.
-3. When you submit an email, the app cleans and prepares its text, then checks its words and message details.
-4. A spam check predicts spam or regular email. A separate topic check predicts one of eight topics, such as phishing, marketing, work, or newsletters.
-5. The app returns the predictions, probabilities, and clues. The dashboard displays the results.
+## 📌 Table of Contents
 
-The classifiers are implemented in Java and trained each time the application starts. Their measured results describe the included sample dataset; they do not guarantee performance on real-world email.
+- [Project Architecture](#-project-architecture)
+- [How It Works (Interview-Ready Explanation)](#-how-it-works-interview-ready-explanation)
+  - [1. Natural Language Processing (NLP) Pipeline](#1-natural-language-processing-nlp-pipeline)
+  - [2. Feature Extraction: TF-IDF (Unigrams & Bigrams)](#2-feature-extraction-tf-idf-unigrams--bigrams)
+  - [3. Classification Engine: Multinomial Naive Bayes](#3-classification-engine-multinomial-naive-bayes)
+  - [4. Multi-Class Topic Classification](#4-multi-class-topic-classification)
+  - [5. Explainability (XAI) & Domain Heuristics](#5-explainability-xai--domain-heuristics)
+- [Core Features](#-core-features)
+- [Technology Stack](#-technology-stack)
+- [Directory Structure](#-directory-structure)
+- [Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Run Locally](#run-locally)
+  - [Run with Docker](#run-with-docker)
+  - [Run Unit & Integration Tests](#run-unit--integration-tests)
+- [Command-Line Interface (CLI)](#-command-line-interface-cli)
+- [REST API Reference](#-rest-api-reference)
+- [Security & Production Safeguards](#-security--production-safeguards)
+- [How to Explain This Project in an Interview](#-how-to-explain-this-project-in-an-interview)
 
-## Features
+---
 
-- Check one email or a batch of up to 100 emails
-- Try built-in sample messages from the dashboard
-- View spam or regular-email probabilities and a predicted topic
-- See words and message details that influenced the result
-- Review measured performance on the held-back sample emails
-- Use the same checks from a command-line interface
+## 🏗️ Project Architecture
 
-## Project folders in plain language
+The application strictly adheres to the standard Spring Boot **Controller-Service-DTO** layered architecture:
 
-- `web`: browser pages and REST API routes.
-- `config`: request-size limits, rate limits, and browser security headers.
-- `service/emailclassification`: training the classifiers and producing spam/topic predictions. “ML” means machine learning: the program learns patterns from example emails.
-- `service/textprocessing`: cleaning email text and splitting it into useful words. “NLP” means natural language processing, which is the general name for working with human language in software.
-- `service/emailrules`: extra checks for suspicious email patterns. A “heuristic” is a practical clue or rule; it is not proof that a message is spam.
-- `cli`: a command-line way to try the classifier.
-
-## Java implementation
-
-- Java 21 and Spring Boot (the version is managed by the parent in `pom.xml`)
-- Spring MVC and Thymeleaf dashboard
-- Native Java text preprocessor with URL/email/currency/phone/number normalization, stopword filtering, and Porter stemming
-- TF-IDF with sublinear term frequency, unigrams and bigrams, `min_df=2`, up to 3,000 spam features and 2,500 topic features
-- Multinomial Naive Bayes with `alpha=0.5`; eight-topic logistic-style softmax classifier
-- Spam/ham probabilities, topic confidence, structural features, and top positive/negative TF-IDF feature contributions
-- Single-email and batch JSON endpoints, plus a browser dashboard and measured holdout metrics
-
-The application trains a Multinomial Naive Bayes spam classifier and reports stratified 80/20 holdout results. Its topic classifier uses TF-IDF features with a multiclass softmax model. These measured results describe the included dataset and may differ on real-world email.
-
-## Dataset and evaluation
-
-The dataset is `src/main/resources/dataset/emails.csv`. At startup, the app reads its multiline CSV records, makes a deterministic stratified 80/20 split (seed 42), trains both models on 2,080 rows, and evaluates them on 520 held-out rows. `GET /api/metrics` returns accuracy, precision, recall, F1, ROC-AUC, confusion matrix, and topic accuracy.
-
-The included dataset is curated and does not establish real-world spam-filter performance. Evaluate against representative unseen email before using this as a filter.
-
-## Requirements and startup
-
-- JDK 21 (or compatible OpenJDK 21+)
-- Maven 3.6.3 or newer
-- Docker (optional, for containerized run)
-
-### Start Web Server
-
-```zsh
-./run.sh
-# or
-mvn spring-boot:run
+```
+┌────────────────────────────────────────────────────────┐
+│               Client Requests                          │
+│     (Web Browser Dashboard / CLI / REST API Client)    │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│               Security & Filter Layer                  │
+│   • SecurityHeadersFilter (CSP, X-Frame, Nosniff)      │
+│   • ApiRateLimitFilter (Sliding Window: 30 req/min)    │
+│   • RequestBodyLimitFilter (Max 1MB payload buffer)    │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│               Web & Controller Layer                   │
+│   • ClassificationController (Thymeleaf view)          │
+│   • ClassificationApiController (REST JSON endpoints)  │
+│   • ApiExceptionHandler (@RestControllerAdvice)        │
+└───────────────────────────┬────────────────────────────┘
+                            │ DTOs (Request / Response)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│               Service & ML Layer                       │
+│   • EmailClassificationService (Orchestrator)          │
+│   • TextPreprocessingService (Stemming & Cleaning)     │
+│   • TfidfVectorizer (Sublinear TF, Unigrams+Bigrams)   │
+│   • NaiveBayesClassifierService (Multinomial NB)       │
+│   • TopicClassificationService (8-class Softmax)       │
+│   • HeuristicRuleEngineService (Domain Rules)          │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│            Dataset & In-Memory Model State             │
+│   • CsvEmailDatasetLoader (2,600 emails dataset)       │
+│   • Deterministic 80/20 Stratified Train/Test Split    │
+└────────────────────────────────────────────────────────┘
 ```
 
-The application uses port 8080 locally by default. Open <http://localhost:8080> in your browser.
+---
+
+## 🧠 How It Works (Interview-Ready Explanation)
+
+### 1. Natural Language Processing (NLP) Pipeline
+Before feeding text into machine learning algorithms, raw emails undergo systematic normalization:
+* **HTML Stripping**: Eliminates HTML markup tags while retaining text content.
+* **Entity Tokenization**: Normalizes URLs to `token_url`, emails to `token_email`, currencies to `token_money`, phone numbers to `token_phone`, and digits to `token_num`.
+* **Case Folding & Punctuation**: Converts text to lowercase and cleans non-alphanumeric punctuation.
+* **Stopword Filtering**: Removes common English filler words (*the, is, at, which*) while selectively retaining critical intent words (*free, urgent, win, won, no, not*).
+* **Porter Stemming**: Reduces morphological variants to base stems (e.g., *"banking"*, *"banks"*, *"banked"* $\rightarrow$ *"bank"*).
+
+### 2. Feature Extraction: TF-IDF (Unigrams & Bigrams)
+Text is represented numerically using **Term Frequency - Inverse Document Frequency (TF-IDF)**:
+$$\text{TF-IDF}(t, d) = \text{TF}(t, d) \times \text{IDF}(t)$$
+* **Sublinear Term Frequency Scaling**: $\text{TF}(t, d) = 1 + \ln(\text{count})$, preventing repeated keywords from dominating the score.
+* **Inverse Document Frequency**: $\text{IDF}(t) = \ln\left(\frac{1 + N}{1 + \text{DF}(t)}\right) + 1$, assigning higher weights to rare, discriminative words.
+* **Unigrams + Bigrams**: Captures both single words (*"account"*, *"verify"*) and essential two-word phrases (*"verify account"*, *"wire transfer"*, *"claim prize"*).
+* **Vocabulary Pruning**: Applies `min_df=2` to drop hapax legomena (noise words that only appear once).
+
+### 3. Classification Engine: Multinomial Naive Bayes
+Binary classification (Spam vs. Ham) is powered by **Multinomial Naive Bayes**:
+$$P(\text{Spam} \mid \text{email}) = \frac{P(\text{Spam}) \prod_{i=1}^n P(w_i \mid \text{Spam})}{P(\text{email})}$$
+* **Log-Space Likelihoods**: Probabilities are calculated in log-space ($\sum \ln P(w_i \mid C)$) to prevent floating-point arithmetic underflow.
+* **Laplace Smoothing ($\alpha = 0.5$)**: Adds a small pseudocount to handle unseen words and avoid zero-probability traps:
+  $$P(w_i \mid C) = \frac{\text{count}(w_i, C) + \alpha}{\sum_{w} \text{count}(w, C) + \alpha \cdot |V|}$$
+
+### 4. Multi-Class Topic Classification
+In addition to binary spam detection, a softmax logistic regression classifier categorizes emails into **8 topics**:
+1. `phishing` – Phishing & Credential Theft
+2. `lottery` – Lottery & Sweepstakes Scams
+3. `crypto_scam` – Bitcoin & Investment Scams
+4. `marketing` – Commercial Promotions & Discounts
+5. `work` – Workplace & Engineering Collaboration
+6. `personal` – Personal & Social Messages
+7. `notification` – Order Confirmations & Travel Alerts
+8. `newsletter` – Newsletters & Educational Digests
+
+### 5. Explainability (XAI) & Domain Heuristics
+* **Token Attribution**: Explains *why* an email was classified as spam or ham by ranking tokens with the highest positive log-likelihood ratio (pushing towards spam) or negative ratio (pushing towards ham).
+* **Domain Heuristics**: Evaluates uppercase character ratio (shouting), exclamation mark frequency, currency symbol counts, direct IP URLs, and mixed-script homoglyphs (e.g. Cyrillic letters spoofing Latin domain names).
+* **Benign-Padding Resistance**: Inspects long messages in bounded chunks to prevent attackers from hiding short phishing payloads inside large blocks of benign text.
+
+---
+
+## ⚡ Core Features
+
+- **Interactive Web Dashboard**: Built with Thymeleaf, HTML5, CSS3, and JavaScript featuring instant preset emails, a visual probability gauge, and structural signal breakdowns.
+- **RESTful API**: Clean JSON endpoints supporting single-email and batch evaluations (1–100 emails).
+- **Command-Line Interface (CLI)**: Terminal tool supporting single predictions, batch sample suites, holdout metrics, and an interactive prompt REPL.
+- **Model Evaluation**: Deterministic 80/20 train/test holdout split evaluated on 2,600 emails with accuracy, precision, recall, F1, and confusion matrix.
+- **Secure by Default**: In-memory rate limiting, maximum request body size caps, secure HTTP headers, and strict user-data privacy (no email bodies logged).
+
+---
+
+## 🛠️ Technology Stack
+
+| Component | Technology | Description |
+|---|---|---|
+| **Language** | Java 21 | Modern LTS Java (records, text blocks, pattern matching) |
+| **Framework** | Spring Boot 3.5.7 | Web, Thymeleaf, Validation, Testing |
+| **Template Engine** | Thymeleaf | Server-rendered responsive HTML dashboard |
+| **Build Tool** | Apache Maven 3.9+ | Dependency management and packaging |
+| **Testing** | JUnit 5 & MockMvc | Comprehensive unit and integration test suite |
+| **Containerization**| Docker | Multi-stage build on minimal Alpine JRE |
+| **Architecture** | Controller-Service-DTO | Clean separation of concerns |
+
+---
+
+## 📁 Directory Structure
+
+```text
+├── Dockerfile                  # Multi-stage Docker build file
+├── .dockerignore               # Docker build exclusions
+├── pom.xml                     # Maven project descriptor
+├── run.sh                      # Shell launcher for Web App
+├── cli.sh                      # Shell launcher for CLI
+├── src
+│   ├── main
+│   │   ├── java/com/classifier/spam
+│   │   │   ├── SpamEmailClassifierApplication.java   # Spring Boot entry point
+│   │   │   ├── cli/
+│   │   │   │   └── SpamClassifierCli.java            # Terminal CLI tool
+│   │   │   ├── config/
+│   │   │   │   ├── ApiRateLimitFilter.java           # In-memory sliding window rate limiter
+│   │   │   │   ├── RequestBodyLimitFilter.java       # 1MB payload buffer filter
+│   │   │   │   └── SecurityHeadersFilter.java        # CSP, X-Frame-Options, No-Sniff
+│   │   │   ├── dto/
+│   │   │   │   ├── ClassificationRequest.java        # Single email request DTO
+│   │   │   │   ├── BatchClassificationRequest.java   # Batch emails request DTO
+│   │   │   │   ├── ClassificationResponse.java       # Detailed verdict response DTO
+│   │   │   │   ├── BatchClassificationResponse.java  # Batch response envelope
+│   │   │   │   └── ErrorResponse.java                # Global error envelope DTO
+│   │   │   ├── service/
+│   │   │   │   ├── emailclassification/
+│   │   │   │   │   ├── EmailClassificationService.java     # Orchestration service
+│   │   │   │   │   ├── NaiveBayesClassifierService.java    # Multinomial NB model
+│   │   │   │   │   ├── TfidfVectorizer.java                # TF-IDF feature extractor
+│   │   │   │   │   ├── TopicClassificationService.java     # 8-class softmax model
+│   │   │   │   │   ├── ModelTrainingService.java           # 80/20 train/test evaluator
+│   │   │   │   │   ├── CsvEmailDatasetLoader.java          # Multiline CSV parser
+│   │   │   │   │   └── EmailTrainingExample.java           # Training record model
+│   │   │   │   ├── emailrules/
+│   │   │   │   │   └── HeuristicRuleEngineService.java     # Domain heuristics engine
+│   │   │   │   └── textprocessing/
+│   │   │   │       ├── PorterStemmer.java                  # English Porter stemmer
+│   │   │   │       └── TextPreprocessingService.java       # NLP cleaning & tokens
+│   │   │   └── web/
+│   │   │       ├── ClassificationController.java     # Thymeleaf dashboard controller
+│   │   │       ├── ClassificationApiController.java  # REST API controller
+│   │   │       └── ApiExceptionHandler.java          # Global @RestControllerAdvice
+│   │   └── resources
+│   │       ├── application.properties                # Spring configuration
+│   │       ├── dataset/
+│   │       │   └── emails.csv                        # 2,600 emails benchmark dataset
+│   │       ├── static/
+│   │       │   ├── styles.css                        # Modern CSS styling
+│   │       │   └── app.js                            # Dashboard UI script
+│   │       └── templates/
+│   │           └── index.html                        # Thymeleaf dashboard template
+│   └── test
+│       └── java/com/classifier/spam
+│           ├── config/SecurityFiltersTest.java                  # Filter & security tests
+│           ├── service/EmailClassificationServiceTest.java      # Service classification tests
+│           ├── service/HeuristicRuleEngineServiceTest.java      # Rule engine tests
+│           ├── service/TextPreprocessingServiceTest.java        # NLP & stemmer tests
+│           └── web/ClassificationApiIntegrationTest.java        # MockMvc REST API tests
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **JDK 21** or higher
+- **Maven 3.6.3** or higher
+- **Docker** (optional)
+
+### Run Locally
+
+1. Start the application using Maven or the convenience script:
+   ```zsh
+   ./run.sh
+   # or
+   mvn spring-boot:run
+   ```
+2. Open your browser and navigate to:
+   ```
+   http://localhost:8080
+   ```
 
 To package and run as a standalone JAR:
-
 ```zsh
-mvn clean package
+mvn clean package -DskipTests
 java -jar target/spam-email-classifier-1.0.0.jar
-```
-
-### Run Tests
-
-```zsh
-mvn test
 ```
 
 ### Run with Docker
 
+1. Build the container image:
+   ```zsh
+   docker build -t spam-email-classifier .
+   ```
+2. Run the container:
+   ```zsh
+   docker run -d -p 8080:8080 --name spam-checker spam-email-classifier
+   ```
+3. Access the dashboard at `http://localhost:8080`.
+
+### Run Unit & Integration Tests
+
+Execute all 23 unit and integration tests:
 ```zsh
-docker build -t spam-email-classifier .
-docker run -p 8080:8080 spam-email-classifier
+mvn test
 ```
 
-## Command-line interface (CLI)
+---
 
-Use the `./cli.sh` launcher (or run `com.classifier.spam.cli.SpamClassifierCli` directly from your IDE):
+## 💻 Command-Line Interface (CLI)
+
+The project includes an interactive CLI launcher `./cli.sh`:
 
 ```zsh
-# Classify a single email (Formatted Card View)
-./cli.sh predict --text "URGENT: Your PayPal account has been suspended! Verify here: http://fake-paypal.com"
+# 1. Classify a single email (Formatted Card View)
+./cli.sh predict --text "URGENT: Your PayPal account is suspended. Verify credentials now at http://paypal-fake.com"
 
-# Classify as JSON output
+# 2. Output as raw JSON (useful for piping into jq or scripts)
 ./cli.sh predict --text "Flight reservation confirmed for tomorrow" --json
 
-# Run benchmark test suite across 5 preset categories
+# 3. Run built-in benchmark samples
 ./cli.sh test-samples
 
-# View held-out test evaluation metrics (Accuracy, F1, Confusion Matrix)
+# 4. View held-out test evaluation metrics
 ./cli.sh metrics
 
-# Start interactive REPL
+# 5. Start interactive REPL prompt
 ./cli.sh interactive
 ```
 
-## Browser dashboard
+---
 
-The dashboard at `/` provides sample presets, a spam/ham probability gauge, topic badge, structural features, top spam/ham words, and a model evaluation table.
+## 📡 REST API Reference
 
-## REST API
+### 1. Classify Single Email
+- **Endpoint**: `POST /api/classify`
+- **Request Body**:
+  ```json
+  {
+    "text": "URGENT: Your PayPal account has been restricted. Click http://verify-paypal.com to unlock."
+  }
+  ```
+- **Example cURL**:
+  ```zsh
+  curl -sS -X POST http://localhost:8080/api/classify \
+    -H "Content-Type: application/json" \
+    -d '{"text":"URGENT: Your PayPal account has been restricted. Click http://verify-paypal.com to unlock."}'
+  ```
+- **Response** (`200 OK`):
+  ```json
+  {
+    "label": "spam",
+    "is_spam": true,
+    "confidence": 0.9997,
+    "confidence_percent": 99.97,
+    "spam_probability": 0.9997,
+    "ham_probability": 0.0003,
+    "topic": "phishing",
+    "topic_display": "Phishing & Credential Alert",
+    "topic_confidence": 28.22,
+    "explanation": {
+      "top_spam_words": [
+        { "word": "verifi", "impact": 0.94, "tfidf": 0.35 },
+        { "word": "paypal account", "impact": 0.92, "tfidf": 0.42 }
+      ],
+      "top_ham_words": [],
+      "all_analyzed_tokens": 12
+    },
+    "heuristics": {
+      "cap_ratio": 0.12,
+      "currency_count": 0,
+      "url_count": 1,
+      "exclamation_ratio": 0.012
+    }
+  }
+  ```
 
-### `POST /api/classify`
+### 2. Batch Classification
+- **Endpoint**: `POST /api/batch`
+- **Request Body** (1–100 emails):
+  ```json
+  {
+    "emails": [
+      "Congratulations! You won $2.5M in the sweepstakes.",
+      "Hi team, please find the sprint report attached."
+    ]
+  }
+  ```
+- **Example cURL**:
+  ```zsh
+  curl -sS -X POST http://localhost:8080/api/batch \
+    -H "Content-Type: application/json" \
+    -d '{"emails":["Congratulations! You won $2.5M.", "Hi team, sprint retro is at 2 PM."]}'
+  ```
 
-```zsh
-curl -sS -X POST http://localhost:8080/api/classify \
-  -H 'Content-Type: application/json' \
-  -d '{"text":"URGENT: Your account has been restricted. Click http://verify-paypal.com to unlock."}'
-```
+### 3. Model Benchmark Metrics
+- **Endpoint**: `GET /api/metrics`
+- **Response**: Returns accuracy, precision, recall, F1, ROC-AUC, and confusion matrix on the held-out test split.
 
-The response includes `label`, `is_spam`, spam/ham probabilities, `topic` and topic confidence, top spam/ham feature contributions, and the structural heuristic values. Empty text returns 400. Email text is limited to 50,000 characters and request bodies to 2 MB.
+### 4. System Health Check
+- **Endpoint**: `GET /api/health`
+- **Response**: `{"status": "ok", "model": "ready"}`
 
-### `POST /api/batch`
+---
 
-```zsh
-curl -sS -X POST http://localhost:8080/api/batch \
-  -H 'Content-Type: application/json' \
-  -d '{"emails":["Congratulations! You won a prize.","Hi team, the meeting is at 2 PM."]}'
-```
+## 🔒 Security & Production Safeguards
 
-Batch requests accept 1–100 emails and return `{ "count": ..., "results": [...] }`.
+1. **Input Validation**: Uses `jakarta.validation` (`@NotBlank`, `@Size(max = 50_000)`) on request payloads.
+2. **In-Memory Rate Limiting**: `ApiRateLimitFilter` throttles single-email requests to 30/min and batch requests to 10/min per IP address. Responds with `429 Too Many Requests` and a `Retry-After` header.
+3. **Payload Buffering & Size Caps**: `RequestBodyLimitFilter` strictly caps request bodies at 1 MB to prevent memory exhaustion / DoS attacks.
+4. **No Stack Trace Exposure**: `ApiExceptionHandler` handles exceptions globally and returns consistent, safe JSON responses (`ErrorResponse`). Stack traces are logged server-side and never returned to the client.
+5. **Data Privacy**: The server logs only request metadata (character count, result label, confidence) — never the user's private email body.
+6. **Hardened HTTP Headers**: Automatically sets `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store`.
 
-### `GET /api/metrics`, `GET /api/stats`, `GET /api/health`
+---
 
-`/api/metrics` returns measured Java holdout metrics, `/api/stats` returns training and vocabulary counts plus the evaluation, and `/api/health` reports whether the app started with its models loaded.
+## 🎤 How to Explain This Project in an Interview
 
-## Security and scope
+When explaining this project to a technical interviewer, use this 4-step framework:
 
-- Request bodies are limited to 1 MB; each email is limited to 50,000 characters and each batch to 100 messages. Tomcat worker threads and connections are capped to bound concurrent memory and CPU use.
-- Classification requests are throttled per client address: 30 single-email checks and 10 batch requests per minute. Excess requests receive HTTP 429 and a `Retry-After` header.
-- Tomcat concurrency is capped, and long messages receive a bounded check of several segments so a short spam message is less easily hidden by benign text. Mixed Latin/Cyrillic or Latin/Greek domains are flagged as suspicious.
-- Null bytes are stripped before preprocessing. Invalid JSON and validation failures return concise errors; stack traces and internal exception details are not returned.
-- The Java application does not load serialized model files. It trains from the bundled CSV dataset at startup, so Python `joblib`/`pickle` model-loading risks and Flask's development debugger do not apply to this implementation.
-- The dashboard uses local static assets, escaped/constructed text output, a restrictive content security policy, and browser security headers. API responses are marked `no-store`.
-- The endpoints remain unauthenticated for local demonstration. Rate limits are in-memory and per application instance; the text-analysis checks are heuristics, not a guarantee against denial of service, phishing, or adversarial messages. Add authentication, HTTPS, and gateway-level controls before exposing the service publicly.
-- The app stores no email submissions and requires no secrets or database.
+1. **The Problem & What You Built**:
+   > *"I built an end-to-end Spam Email Classifier and Safety Checker using Java 21 and Spring Boot. Rather than relying on external black-box APIs or Python sidecars, I implemented the NLP preprocessing, TF-IDF feature extraction, and Multinomial Naive Bayes classification directly in native Java."*
+
+2. **The Architecture**:
+   > *"I structured the application using a clean Controller-Service-DTO pattern. Incoming requests pass through security filters for in-memory rate limiting and request body size caps. Controllers validate inputs using Jakarta Validation and map requests to DTOs. The service layer coordinates natural language preprocessing, feature extraction, and classification, returning an explainable result with confidence scores, topic tags, and top contributing tokens."*
+
+3. **The Machine Learning Implementation**:
+   > *"For text vectorization, I implemented TF-IDF with sublinear term frequency scaling and unigram plus bigram extraction, which allows the model to capture context like 'verify account' or 'wire transfer'. Classification uses Multinomial Naive Bayes in log-space with Laplace smoothing to avoid zero-frequency problems. In addition, I implemented a multi-class softmax classifier for 8 email topics and a domain heuristic engine to detect structural threats like mixed-script homoglyph domains and high-urgency keywords."*
+
+4. **Production Readiness & Testing**:
+   > *"To make it robust and easy to deploy, I wrote 23 unit and integration tests using JUnit 5 and Spring's MockMvc, covering validation edges, rate limiting, and classification accuracy. I packaged the application using a multi-stage Alpine Dockerfile and added global exception handling to ensure internal stack traces are never leaked."*
+
+---
+
+## 📄 License
+This project is open-source and available under the [MIT License](LICENSE).

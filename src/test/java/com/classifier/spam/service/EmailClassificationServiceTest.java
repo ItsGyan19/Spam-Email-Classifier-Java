@@ -1,7 +1,7 @@
 package com.classifier.spam.service;
 
 import com.classifier.spam.service.emailclassification.EmailClassificationService;
-import com.classifier.spam.service.emailclassification.EmailClassificationService.ClassificationResponse;
+import com.classifier.spam.dto.ClassificationResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

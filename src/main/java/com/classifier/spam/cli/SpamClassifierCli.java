@@ -2,7 +2,7 @@ package com.classifier.spam.cli;
 
 import com.classifier.spam.SpamEmailClassifierApplication;
 import com.classifier.spam.service.emailclassification.EmailClassificationService;
-import com.classifier.spam.service.emailclassification.EmailClassificationService.ClassificationResponse;
+import com.classifier.spam.dto.ClassificationResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.springframework.boot.WebApplicationType;
